@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>ミニ動物タワーバトル</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background: #f0f0f0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas { box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+<script>
+// Matter.jsのモジュールを取り出す
+const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint } = Matter;
+
+// 1. エンジンとレンダラーの作成
+const engine = Engine.create();
+const render = Render.create({
+    element: document.body,
+    engine: engine,
+    options: {
+        width: 400,
+        height: 600,
+        wireframes: false, // 塗りつぶしモード
+        background: '#e0f7fa'
+    }
+});
+
+Render.run(render);
+Runner.run(Runner.create(), engine);
+
+// 2. 土台（床）の作成
+const ground = Bodies.rectangle(200, 500, 200, 40, { 
+    isStatic: true, // 固定されて動かない設定
+    render: { fillStyle: '#4caf50' } 
+});
+Composite.add(engine.world, ground);
+
+// 3. クリックした場所にランダムなサイズの「動物ブロック」を落とす
+window.addEventListener('click', (event) => {
+    // クリックされたX座標を取得（簡易的）
+    const rect = render.canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    
+    // 画面外のクリックは無視
+    if (mouseX < 0 || mouseX > 400) return;
+
+    // ランダムなサイズ（幅と高さ）
+    const width = Math.random() * 40 + 30;
+    const height = Math.random() * 40 + 30;
+
+    // 新しいブロックを作成して上空(Y=50)から落とす
+    const animalBlock = Bodies.rectangle(mouseX, 50, width, height, {
+        restitution: 0.1, // 跳ね返り係数（少しだけ弾む）
+        friction: 0.05,    // 摩擦
+        render: { fillStyle: `hsl(${Math.random() * 360}, 70%, 60%)` } // ランダムな色
+    });
+
+    Composite.add(engine.world, animalBlock);
+});
+</script>
+
+</body>
+</html>
