@@ -6,143 +6,133 @@
     <script src="https://cdn.jsdelivr.net/npm/pathseg@1.2.1/pathseg.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
-        /* デフォルトはフォールバックのグラデーション。存在すれば JS で画像に置き換える */
         body { margin: 0; padding: 0; background: linear-gradient(180deg,#66d9ff 0%,#a7f0ff 100%); display: flex; justify-content: center; align-items: center; height: 100vh; }
-        /* キャンバスは透明にして下の背景を見せる */
         canvas { box-shadow: 0 10px 30px rgba(0,0,0,0.1); background: transparent; }
-    </style>
-</head>
-<body>
-    <!-- 回転ボタン（キャンバス上に重ねる） -->
-    <button id="rotateBtn" title="回転">回転↻</button>
-    <style>
         #rotateBtn {
-            position: fixed;
-            left: 50%;
-            transform: translateX(-50%);
-            bottom: 18px;
-            padding: 12px 22px;
-            background: #fff;
-            border-radius: 12px;
-            border: 3px solid #ffc0cb;
-            color: #e91e63;
-            font-weight: 700;
-            z-index: 9999;
-            box-shadow: 0 6px 14px rgba(0,0,0,0.15);
-            cursor: pointer;
+            position: fixed; left: 50%; transform: translateX(-50%);
+            bottom: 18px; padding: 12px 22px; background: #fff;
+            border-radius: 12px; border: 3px solid #ffc0cb; color: #e91e63;
+            font-weight: 700; z-index: 9999; box-shadow: 0 6px 14px rgba(0,0,0,0.15); cursor: pointer;
         }
         #rotateBtn:active { transform: translateX(-50%) scale(0.98); }
     </style>
+</head>
+<body>
+    <button id="rotateBtn" title="回転">回転↻</button>
 <script>
-// 【ポイント1】使用するモジュールに「Vertices」と `Body` を追加
 const { Engine, Render, Runner, Bodies, Composite, Vertices, Body } = Matter;
 
-// 背景画像があれば自動で差し替える（ファイル: src/img/background.png）
 (function() {
     const bgPath = 'src/img/background.png';
     const img = new Image();
-    img.onload = () => {
-        document.body.style.background = `url('${bgPath}') center top / cover no-repeat`;
-    };
-    img.onerror = () => {
-        // そのままフォールバックグラデーションを使用
-        console.warn('背景画像が見つかりません: ' + bgPath);
-    };
+    img.onload = () => { document.body.style.background = `url('${bgPath}') center top / cover no-repeat`; };
+    img.onerror = () => { console.warn('背景画像が見つかりません: ' + bgPath); };
     img.src = bgPath;
 })();
 
-// 回転状態（度） — ボタンで操作し、次に落とすオブジェクトに適用する
-let currentRotationDeg = 0;
-const rotateBtn = document.getElementById('rotateBtn');
-rotateBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    // 30度ずつ回転
-    currentRotationDeg = (currentRotationDeg + 30) % 360;
-    rotateBtn.textContent = `回転↻ (${currentRotationDeg}°)`;
-    // 上空で待機中のボディがあれば角度を適用
-    const angleRad = currentRotationDeg * Math.PI / 180;
-    if (typeof heldBody !== 'undefined' && heldBody) {
-        if (heldIsArray) {
-            heldBody.forEach(b => Body.setAngle(b, angleRad));
-        } else {
-            Body.setAngle(heldBody, angleRad);
-        }
-    }
-});
+// ★ 全画像をこのサイズ（長辺）に統一
+const BASE_SIZE = 120;
 
-const ANIMAL_PATHS = [
-    'src/img/iloveimg-converted/翔斗1.png',
-    'src/img/iloveimg-converted/翔斗2.png',
-    'src/img/iloveimg-converted/翔斗3.png',
+const PROCESSED_PATHS = [
+    'src/img/iloveimg-converted/shoto.png1.png',
+    'src/img/iloveimg-converted/shoto.png2.png',
+    'src/img/iloveimg-converted/shoto.png3.png',
+    'src/img/iloveimg-converted/shoto.png4.png',
+    'src/img/iloveimg-converted/shoto.png5.png',
+    'src/img/iloveimg-converted/shoto.png6.png',
+    'src/img/iloveimg-converted/shoto.png7.png',
+    'src/img/iloveimg-converted/shoto.png8.png',
+    'src/img/iloveimg-converted/shoto.png9.png',
+    'src/img/iloveimg-converted/shoto.png10.png',
+    'src/img/iloveimg-converted/shoto.png11.png',
+    'src/img/iloveimg-converted/shoto.png12.png',
+    'src/img/iloveimg-converted/shoto.png13.png',
+    'src/img/iloveimg-converted/shoto.png14.png',
+    'src/img/iloveimg-converted/shoto.png15.png',
 ];
 
-// 背景色を透過に変換し、同時に「切り抜き用の輪郭データ」を作成する
-function processAnimalImage(img, threshold = 40) {
-    const canvas = document.createElement('canvas');
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
+const UNPROCESSED_PATHS = [
+    'src/img/iloveimg-converted/%E7%BF%94%E6%96%971.png',
+    'src/img/iloveimg-converted/%E7%BF%94%E6%96%972.png',
+    'src/img/iloveimg-converted/%E7%BF%94%E6%96%973.png',
+];
 
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-
-    // 左上のピクセルを背景色として取得
-    const bgR = data[0], bgG = data[1], bgB = data[2];
-
-    for (let i = 0; i < data.length; i += 4) {
-        const diff = Math.sqrt(
-            Math.pow(data[i]   - bgR, 2) +
-            Math.pow(data[i+1] - bgG, 2) +
-            Math.pow(data[i+2] - bgB, 2)
-        );
-        if (diff < threshold) {
-            data[i+3] = 0; // 透明にする
-        }
+// 全画像をBASE_SIZEにリサイズ → 必要なら背景透過 → vertices抽出
+function prepareAnimal(img, bgRemove) {
+    // アスペクト比を維持してリサイズ後のサイズを計算
+    let tw, th;
+    if (img.naturalWidth > img.naturalHeight) {
+        tw = BASE_SIZE;
+        th = Math.round(BASE_SIZE * img.naturalHeight / img.naturalWidth);
+    } else {
+        th = BASE_SIZE;
+        tw = Math.round(BASE_SIZE * img.naturalWidth / img.naturalHeight);
     }
-    ctx.putImageData(imageData, 0, 0);
 
-    // 【ポイント2】Matter.jsの機能を使って、透過したCanvasから大まかな輪郭（頂点）を自動抽出
-    // ※ 頂点数が多すぎると重くなるため、適度に間引く（Vertices.create）
+    // 元サイズで描画して背景除去
+    const srcCanvas = document.createElement('canvas');
+    srcCanvas.width = img.naturalWidth;
+    srcCanvas.height = img.naturalHeight;
+    const srcCtx = srcCanvas.getContext('2d');
+    srcCtx.drawImage(img, 0, 0);
+
+    if (bgRemove) {
+        const id = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+        const d = id.data;
+        const bgR = d[0], bgG = d[1], bgB = d[2];
+        for (let i = 0; i < d.length; i += 4) {
+            const diff = Math.sqrt(
+                Math.pow(d[i] - bgR, 2) +
+                Math.pow(d[i+1] - bgG, 2) +
+                Math.pow(d[i+2] - bgB, 2)
+            );
+            if (diff < 40) d[i+3] = 0;
+        }
+        srcCtx.putImageData(id, 0, 0);
+    }
+
+    // BASE_SIZEにリサイズしたcanvasを作成（これがテクスチャになる）
+    const dstCanvas = document.createElement('canvas');
+    dstCanvas.width = tw;
+    dstCanvas.height = th;
+    const dstCtx = dstCanvas.getContext('2d');
+    dstCtx.drawImage(srcCanvas, 0, 0, tw, th);
+
+    // リサイズ後のcanvasからvertices抽出
+    const id2 = dstCtx.getImageData(0, 0, tw, th);
+    const d2 = id2.data;
     const points = [];
-    for (let y = 0; y < canvas.height; y += 4) { // 4ピクセルおきにスキャン（軽量化のため）
-        for (let x = 0; x < canvas.width; x += 4) {
-            const alpha = data[(y * canvas.width + x) * 4 + 3];
-            if (alpha > 0) { // 透明じゃない部分を記録
-                points.push({ x: x, y: y });
-            }
+    for (let y = 0; y < th; y += 2) {
+        for (let x = 0; x < tw; x += 2) {
+            if (d2[(y * tw + x) * 4 + 3] > 0) points.push({ x, y });
         }
     }
-    
-    // 抽出した点群から凸包（外殻の頂点）を計算
-    const vertices = Vertices.hull(points);
+    const vertices = points.length > 3 ? Vertices.hull(points) : null;
 
     return {
-        path: canvas.toDataURL('image/png'),
-        vertices: vertices
+        path: dstCanvas.toDataURL('image/png'),
+        vertices,
+        w: tw,
+        h: th
     };
 }
 
-// 画像プリロード＋背景透過・輪郭抽出
 const loadedImages = [];
-Promise.all(
-    ANIMAL_PATHS.map(path => new Promise((resolve) => {
+Promise.all([
+    ...PROCESSED_PATHS.map(path => new Promise((resolve) => {
         const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-            // 背景透過と輪郭抽出を同時に行う
-            const result = processAnimalImage(img);
-            resolve({ 
-                path: result.path, 
-                vertices: result.vertices,
-                w: img.naturalWidth, 
-                h: img.naturalHeight 
-            });
-        };
+        img.onload = () => resolve(prepareAnimal(img, false));
         img.onerror = () => { console.warn('読み込み失敗:', path); resolve(null); };
         img.src = path;
-    }))
-).then(results => {
+    })),
+    ...UNPROCESSED_PATHS.map(path => new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(prepareAnimal(img, true));
+        img.onerror = () => { console.warn('読み込み失敗:', path); resolve(null); };
+        img.src = path;
+    })),
+]).then(results => {
     loadedImages.push(...results.filter(Boolean));
     console.log(`読み込み完了: ${loadedImages.length}枚`);
 });
@@ -151,14 +141,8 @@ const engine = Engine.create();
 const render = Render.create({
     element: document.body,
     engine: engine,
-    options: {
-        width: 400,
-        height: 600,
-        wireframes: false,
-        background: 'transparent'
-    }
+    options: { width: 400, height: 600, wireframes: false, background: 'transparent' }
 });
-
 Render.run(render);
 Runner.run(Runner.create(), engine);
 
@@ -168,41 +152,43 @@ const ground = Bodies.rectangle(200, 500, 200, 40, {
 });
 Composite.add(engine.world, ground);
 
-// 持ち上げ（配置）状態を管理するための変数
+let currentRotationDeg = 0;
 let heldBody = null;
 let heldIsArray = false;
 let heldAnimal = null;
-const holdY = 50; // 画面上部に固定するY位置
+const holdY = 50;
+
+const rotateBtn = document.getElementById('rotateBtn');
+rotateBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    currentRotationDeg = (currentRotationDeg + 30) % 360;
+    rotateBtn.textContent = `回転↻ (${currentRotationDeg}°)`;
+    const angleRad = currentRotationDeg * Math.PI / 180;
+    if (heldBody) {
+        if (heldIsArray) {
+            heldBody.forEach(b => Body.setAngle(b, angleRad));
+        } else {
+            Body.setAngle(heldBody, angleRad);
+        }
+    }
+});
 
 function createAnimalBodyAt(animal, x, y, isStatic) {
-    const baseSize = 70;
-    let targetWidth, targetHeight;
-    if (animal.w > animal.h) {
-        targetWidth = baseSize;
-        targetHeight = baseSize * (animal.h / animal.w);
-    } else {
-        targetHeight = baseSize;
-        targetWidth = baseSize * (animal.w / animal.h);
-    }
-
-    const scaleX = targetWidth / animal.w;
-    const scaleY = targetHeight / animal.h;
-
-    const scaledVertices = Vertices.scale(
-        animal.vertices.map(v => ({ x: v.x, y: v.y })),
-        scaleX,
-        scaleY
-    );
-
+    // テクスチャはすでにBASE_SIZEに正規化済みなのでxScale/yScale = 1
     const opts = {
         restitution: 0.1,
         friction: 0.05,
         isStatic: !!isStatic,
-        render: { sprite: { texture: animal.path, xScale: scaleX, yScale: scaleY } }
+        render: { sprite: { texture: animal.path, xScale: 1, yScale: 1 } }
     };
 
-    const body = Bodies.fromVertices(x, y, scaledVertices, opts, true);
-    return { body, targetWidth, targetHeight };
+    if (animal.vertices && animal.vertices.length > 2) {
+        const body = Bodies.fromVertices(x, y, animal.vertices, opts, true);
+        return { body, targetWidth: animal.w, targetHeight: animal.h };
+    } else {
+        const body = Bodies.rectangle(x, y, animal.w, animal.h, opts);
+        return { body, targetWidth: animal.w, targetHeight: animal.h };
+    }
 }
 
 function setHeldPosition(clientX) {
@@ -212,17 +198,17 @@ function setHeldPosition(clientX) {
     if (x < 10) x = 10;
     if (x > render.options.width - 10) x = render.options.width - 10;
     if (heldIsArray) {
-        heldBody.forEach(b => Body.setPosition(b, { x: x, y: holdY }));
+        heldBody.forEach(b => Body.setPosition(b, { x, y: holdY }));
     } else {
-        Body.setPosition(heldBody, { x: x, y: holdY });
+        Body.setPosition(heldBody, { x, y: holdY });
     }
 }
 
-// マウス移動で heldBody を左右に移動
-render.canvas.addEventListener('mousemove', (e) => { setHeldPosition(e.clientX); });
-render.canvas.addEventListener('touchmove', (e) => { if (e.touches && e.touches[0]) setHeldPosition(e.touches[0].clientX); }, { passive: false });
+render.canvas.addEventListener('mousemove', (e) => setHeldPosition(e.clientX));
+render.canvas.addEventListener('touchmove', (e) => {
+    if (e.touches && e.touches[0]) setHeldPosition(e.touches[0].clientX);
+}, { passive: false });
 
-// クリックで「持ち上げ」→「配置（移動可能）」→「再クリックで解放（落下）」の流れ
 render.canvas.addEventListener('click', (event) => {
     const rect = render.canvas.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
@@ -233,17 +219,11 @@ render.canvas.addEventListener('click', (event) => {
         return;
     }
 
-    // 既に持っているものがあれば解放（落下）する
     if (heldBody) {
         if (heldIsArray) {
-            heldBody.forEach(b => Body.setStatic(b, false));
+            heldBody.forEach(b => { Body.setStatic(b, false); Body.applyForce(b, b.position, { x: 0, y: 0.002 }); });
         } else {
             Body.setStatic(heldBody, false);
-        }
-        // 少し下方向へ初速を与える（自然に落ちるように）
-        if (heldIsArray) {
-            heldBody.forEach(b => Body.applyForce(b, b.position, { x: 0, y: 0.002 }));
-        } else {
             Body.applyForce(heldBody, heldBody.position, { x: 0, y: 0.002 });
         }
         heldBody = null;
@@ -252,27 +232,10 @@ render.canvas.addEventListener('click', (event) => {
         return;
     }
 
-    // 持っているものがない場合は新しい動物を固定で作成して保持する
     const animal = loadedImages[Math.floor(Math.random() * loadedImages.length)];
-    const { body, targetWidth, targetHeight } = createAnimalBodyAt(animal, mouseX, holdY, true);
+    const { body } = createAnimalBodyAt(animal, mouseX, holdY, true);
+    if (!body) return;
 
-    if (!body) {
-        console.warn('ボディ生成失敗: 四角形で代替');
-        const fallback = Bodies.rectangle(mouseX, holdY, targetWidth, targetHeight, {
-            restitution: 0.1,
-            friction: 0.05,
-            isStatic: true,
-            render: { sprite: { texture: animal.path, xScale: targetWidth / animal.w, yScale: targetHeight / animal.h } }
-        });
-        Body.setAngle(fallback, currentRotationDeg * Math.PI / 180);
-        Composite.add(engine.world, fallback);
-        heldBody = fallback;
-        heldIsArray = false;
-        heldAnimal = animal;
-        return;
-    }
-
-    // fromVertices は配列や単体を返すことがある
     if (Array.isArray(body)) {
         body.forEach(b => { Body.setAngle(b, currentRotationDeg * Math.PI / 180); Composite.add(engine.world, b); });
         heldBody = body;
