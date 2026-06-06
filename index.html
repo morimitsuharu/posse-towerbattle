@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>ミニ動物タワーバトル</title>
+    <script src="https://cdn.jsdelivr.net/npm/pathseg@1.2.1/pathseg.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
         body { margin: 0; padding: 0; background: #f0f0f0; display: flex; justify-content: center; align-items: center; height: 100vh; }
@@ -11,28 +12,17 @@
 </head>
 <body>
 <script>
-const { Engine, Render, Runner, Bodies, Composite } = Matter;
+// 【ポイント1】使用するモジュールに「Vertices」を追加
+const { Engine, Render, Runner, Bodies, Composite, Vertices } = Matter;
 
 const ANIMAL_PATHS = [
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%202.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%203.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%204.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%205.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%206.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%207.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%208.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%209.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%2010.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%2011.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%2012.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%2013.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%2014.jpg',
-    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%2015.jpg',
+    'src/img/iloveimg-converted/翔斗1.png',
+    'src/img/iloveimg-converted/翔斗2.png',
+    'src/img/iloveimg-converted/翔斗3.png',
 ];
 
-// 背景色を透過に変換（左上のピクセルを背景色として検出）
-function removeBackground(img, threshold = 40) {
+// 背景色を透過に変換し、同時に「切り抜き用の輪郭データ」を作成する
+function processAnimalImage(img, threshold = 40) {
     const canvas = document.createElement('canvas');
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
@@ -51,22 +41,48 @@ function removeBackground(img, threshold = 40) {
             Math.pow(data[i+1] - bgG, 2) +
             Math.pow(data[i+2] - bgB, 2)
         );
-        if (diff < threshold) data[i+3] = 0; // 透明にする
+        if (diff < threshold) {
+            data[i+3] = 0; // 透明にする
+        }
     }
-
     ctx.putImageData(imageData, 0, 0);
-    return canvas.toDataURL('image/png');
+
+    // 【ポイント2】Matter.jsの機能を使って、透過したCanvasから大まかな輪郭（頂点）を自動抽出
+    // ※ 頂点数が多すぎると重くなるため、適度に間引く（Vertices.create）
+    const points = [];
+    for (let y = 0; y < canvas.height; y += 4) { // 4ピクセルおきにスキャン（軽量化のため）
+        for (let x = 0; x < canvas.width; x += 4) {
+            const alpha = data[(y * canvas.width + x) * 4 + 3];
+            if (alpha > 0) { // 透明じゃない部分を記録
+                points.push({ x: x, y: y });
+            }
+        }
+    }
+    
+    // 抽出した点群から凸包（外殻の頂点）を計算
+    const vertices = Vertices.hull(points);
+
+    return {
+        path: canvas.toDataURL('image/png'),
+        vertices: vertices
+    };
 }
 
-// 画像プリロード＋背景透過処理
+// 画像プリロード＋背景透過・輪郭抽出
 const loadedImages = [];
 Promise.all(
     ANIMAL_PATHS.map(path => new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => {
-            const transparentPath = removeBackground(img);
-            resolve({ path: transparentPath, w: img.naturalWidth, h: img.naturalHeight });
+            // 背景透過と輪郭抽出を同時に行う
+            const result = processAnimalImage(img);
+            resolve({ 
+                path: result.path, 
+                vertices: result.vertices,
+                w: img.naturalWidth, 
+                h: img.naturalHeight 
+            });
         };
         img.onerror = () => { console.warn('読み込み失敗:', path); resolve(null); };
         img.src = path;
@@ -107,22 +123,57 @@ window.addEventListener('click', (event) => {
         return;
     }
 
-    const size = 60;
     const animal = loadedImages[Math.floor(Math.random() * loadedImages.length)];
 
-    const animalBlock = Bodies.rectangle(mouseX, 50, size, size, {
+    // 縦横比を維持したサイズ計算（潰れ対策）
+    const baseSize = 70;
+    let targetWidth, targetHeight;
+    if (animal.w > animal.h) {
+        targetWidth = baseSize;
+        targetHeight = baseSize * (animal.h / animal.w);
+    } else {
+        targetHeight = baseSize;
+        targetWidth = baseSize * (animal.w / animal.h);
+    }
+
+    // 【ポイント3】縮尺（スケール）を頂点データに適用する
+    const scaleX = targetWidth / animal.w;
+    const scaleY = targetHeight / animal.h;
+    
+    // 読み込み時に作った頂点データを、出現させるサイズに引き伸ばす
+    const scaledVertices = Vertices.scale(
+        // 元の頂点データが壊れないようにコピーして使う
+        animal.vertices.map(v => ({ x: v.x, y: v.y })), 
+        scaleX, 
+        scaleY
+    );
+
+    // Bodies.rectangle から Bodies.fromVertices に変更！
+    const animalBlock = Bodies.fromVertices(mouseX, 50, scaledVertices, {
         restitution: 0.1,
         friction: 0.05,
         render: {
             sprite: {
                 texture: animal.path,
-                xScale: size / animal.w,
-                yScale: size / animal.h
+                xScale: scaleX,
+                yScale: scaleY
             }
         }
     });
 
-    Composite.add(engine.world, animalBlock);
+    // 形状が複雑すぎて生成に失敗した場合のセーフティ
+    if (animalBlock) {
+        Composite.add(engine.world, animalBlock);
+    } else {
+        console.warn("ポリゴンの生成に失敗しました。四角形で代用します。");
+        // 万が一失敗した場合は従来の四角形を落とす
+        const fallback = Bodies.rectangle(mouseX, 50, targetWidth, targetHeight, {
+            restitution: 0.1,
+            friction: 0.05,
+            render: { sprite: { texture: animal.path, xScale: scaleX, yScale: scaleY } }
+        });
+        Composite.add(engine.world, fallback);
+    }
 });
 </script>
 </body>
