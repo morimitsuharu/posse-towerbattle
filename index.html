@@ -10,12 +10,72 @@
     </style>
 </head>
 <body>
-
 <script>
-// Matter.jsのモジュールを取り出す
-const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint } = Matter;
+const { Engine, Render, Runner, Bodies, Composite } = Matter;
 
-// 1. エンジンとレンダラーの作成
+const ANIMAL_PATHS = [
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%202.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%203.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%204.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%205.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%206.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%207.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%208.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%209.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%2010.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%2011.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%2012.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%2013.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%2014.jpg',
+    'src/img/iloveimg-converted/HEIF%E7%94%BB%E5%83%8F%2015.jpg',
+];
+
+// 背景色を透過に変換（左上のピクセルを背景色として検出）
+function removeBackground(img, threshold = 40) {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    // 左上のピクセルを背景色として取得
+    const bgR = data[0], bgG = data[1], bgB = data[2];
+
+    for (let i = 0; i < data.length; i += 4) {
+        const diff = Math.sqrt(
+            Math.pow(data[i]   - bgR, 2) +
+            Math.pow(data[i+1] - bgG, 2) +
+            Math.pow(data[i+2] - bgB, 2)
+        );
+        if (diff < threshold) data[i+3] = 0; // 透明にする
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    return canvas.toDataURL('image/png');
+}
+
+// 画像プリロード＋背景透過処理
+const loadedImages = [];
+Promise.all(
+    ANIMAL_PATHS.map(path => new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            const transparentPath = removeBackground(img);
+            resolve({ path: transparentPath, w: img.naturalWidth, h: img.naturalHeight });
+        };
+        img.onerror = () => { console.warn('読み込み失敗:', path); resolve(null); };
+        img.src = path;
+    }))
+).then(results => {
+    loadedImages.push(...results.filter(Boolean));
+    console.log(`読み込み完了: ${loadedImages.length}枚`);
+});
+
 const engine = Engine.create();
 const render = Render.create({
     element: document.body,
@@ -23,7 +83,7 @@ const render = Render.create({
     options: {
         width: 400,
         height: 600,
-        wireframes: false, // 塗りつぶしモード
+        wireframes: false,
         background: '#e0f7fa'
     }
 });
@@ -31,36 +91,39 @@ const render = Render.create({
 Render.run(render);
 Runner.run(Runner.create(), engine);
 
-// 2. 土台（床）の作成
-const ground = Bodies.rectangle(200, 500, 200, 40, { 
-    isStatic: true, // 固定されて動かない設定
-    render: { fillStyle: '#4caf50' } 
+const ground = Bodies.rectangle(200, 500, 200, 40, {
+    isStatic: true,
+    render: { fillStyle: '#4caf50' }
 });
 Composite.add(engine.world, ground);
 
-// 3. クリックした場所にランダムなサイズの「動物ブロック」を落とす
 window.addEventListener('click', (event) => {
-    // クリックされたX座標を取得（簡易的）
     const rect = render.canvas.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
-    
-    // 画面外のクリックは無視
     if (mouseX < 0 || mouseX > 400) return;
 
-    // ランダムなサイズ（幅と高さ）
-    const width = Math.random() * 40 + 30;
-    const height = Math.random() * 40 + 30;
+    if (loadedImages.length === 0) {
+        console.warn('画像がまだ読み込まれていません');
+        return;
+    }
 
-    // 新しいブロックを作成して上空(Y=50)から落とす
-    const animalBlock = Bodies.rectangle(mouseX, 50, width, height, {
-        restitution: 0.1, // 跳ね返り係数（少しだけ弾む）
-        friction: 0.05,    // 摩擦
-        render: { fillStyle: `hsl(${Math.random() * 360}, 70%, 60%)` } // ランダムな色
+    const size = 60;
+    const animal = loadedImages[Math.floor(Math.random() * loadedImages.length)];
+
+    const animalBlock = Bodies.rectangle(mouseX, 50, size, size, {
+        restitution: 0.1,
+        friction: 0.05,
+        render: {
+            sprite: {
+                texture: animal.path,
+                xScale: size / animal.w,
+                yScale: size / animal.h
+            }
+        }
     });
 
     Composite.add(engine.world, animalBlock);
 });
 </script>
-
 </body>
 </html>
