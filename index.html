@@ -17,12 +17,63 @@
         * { box-sizing: border-box; }
         html, body { width: 100%; height: 100%; overflow: hidden; }
         body {
+
             position: relative; isolation: isolate;
             margin: 0; padding: max(12px, env(safe-area-inset-top, 0px)) 12px calc(84px + var(--safe-bottom));
             background: linear-gradient(180deg,#66d9ff 0%,#a7f0ff 100%);
-            display: flex; justify-content: center; align-items: center; min-height: 100vh; min-height: 100dvh;
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; min-height: 100dvh;
             overscroll-behavior: none; touch-action: none;
         }
+
+        #game-container {
+            position: relative;
+            width: min(100%, 400px, calc((100dvh - 108px - var(--safe-bottom)) * 2 / 3));
+            height: min(600px, calc(100dvh - 108px - var(--safe-bottom)));
+            overflow: hidden; border-radius: 4px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        #game-container canvas {
+            position: absolute; top: 0; left: 0; z-index: 2;
+            width: 100%; height: 100%; background: transparent; display: block;
+        }
+        .sun {
+            position: absolute; right: -32.5%; top: -21.6667%;
+            width: 100%; height: 66.6667%;
+            z-index: 1; pointer-events: none;
+        }
+        /* 雲 */
+        .cloud {
+            position: absolute; background: rgba(255,255,255,0.93);
+            border-radius: 50px; z-index: 1; left: 0;
+            transition: opacity 0.18s linear;
+        }
+        .cloud::before, .cloud::after {
+            content: ''; position: absolute;
+            background: rgba(255,255,255,0.93); border-radius: 50%;
+        }
+        @keyframes cloudFloat {
+            from { transform: translateX(440px); }
+            to   { transform: translateX(-120px); }
+        }
+        .cloud1 { width: 22.5%; height: 4.6667%; top: 8.6667%;  animation: cloudFloat 16s linear infinite -2s; }
+        .cloud1::before { width: 11%; height: 7.3333%; top: -3.8333%; left: 3.25%; }
+        .cloud1::after  { width: 7.5%; height: 5%; top: -2.6667%; right: 3.25%; }
+        .cloud2 { width: 17%; height: 3.6667%; top: 25%; animation: cloudFloat 21s linear infinite -9s; }
+        .cloud2::before { width: 8.5%; height: 5.6667%; top: -3%; left: 2.5%; }
+        .cloud2::after  { width: 6%; height: 4%; top: -2.1667%; right: 2.5%; }
+        .cloud3 { width: 14.5%; height: 3.3333%; top: 14.3333%;  animation: cloudFloat 13s linear infinite -5s; }
+        .cloud3::before { width: 7%; height: 4.6667%; top: -2.5%; left: 2.25%; }
+        .cloud3::after  { width: 5%; height: 3.3333%; top: -1.8333%; right: 2.25%; }
+        .cloud.is-over-sun { opacity: 0.38; }
+        #score-display {
+            position: absolute; top: 10px; left: 10px; z-index: 3;
+            background: rgba(255,255,255,0.88); border-radius: 10px;
+            padding: 5px 14px; font-size: 15px; font-weight: 700;
+            color: #e91e63; box-shadow: 0 2px 8px rgba(0,0,0,0.13);
+            pointer-events: none; font-family: sans-serif;
+        }
+
         body.fireworks-active {
             background: #000 !important;
         }
@@ -115,22 +166,32 @@
             82% { opacity: 1; transform: translate(-50%, -50%) scale(1.02); }
             100% { opacity: 0; transform: translate(-50%, -50%) scale(1.07); }
         }
+      
         #rotateBtn {
             position: fixed; left: 50%; transform: translateX(-50%);
             bottom: calc(18px + var(--safe-bottom)); padding: 12px 22px; background: #fff;
             border-radius: 12px; border: 3px solid #ffc0cb; color: #e91e63;
-            font-size: 16px; font-weight: 700; line-height: 1; z-index: 9999; box-shadow: 0 6px 14px rgba(0,0,0,0.15); cursor: pointer;
+            font-size: 16px; font-weight: 700; line-height: 1; z-index: 9999;
+            box-shadow: 0 6px 14px rgba(0,0,0,0.15); cursor: pointer;
             -webkit-tap-highlight-color: transparent;
         }
         #rotateBtn:active { transform: translateX(-50%) scale(0.98); }
+
+        #bgmToggle {
+            position: fixed; right: 16px; bottom: calc(18px + var(--safe-bottom));
+            padding: 10px 14px; background: #fff; border-radius: 12px; border: 2px solid #90caf9;
+            color: #1565c0; font-weight: 700; z-index: 9999; cursor: pointer; box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+            -webkit-tap-highlight-color: transparent;
+        }
+
         @media (max-width: 480px) {
             body {
                 padding: max(10px, env(safe-area-inset-top, 0px)) 8px calc(92px + var(--safe-bottom));
                 align-items: flex-start;
             }
-            canvas {
-                width: min(100%, 400px, calc(66dvh - 20px));
-                max-height: calc(100dvh - 112px - var(--safe-bottom));
+            #game-container {
+                width: min(100%, 400px, calc((100dvh - 112px - var(--safe-bottom)) * 2 / 3));
+                height: min(600px, calc(100dvh - 112px - var(--safe-bottom)));
             }
             #rotateBtn {
                 min-width: 132px; padding: 15px 24px; border-radius: 14px; font-size: 18px;
@@ -140,7 +201,17 @@
     </style>
 </head>
 <body>
+    <div id="game-container">
+        <div id="score-display">スコア: 0</div>
+        <div class="sun">
+            <img src="src/img/iloveimg-converted/shotosun.png" alt="太陽" style="width:100%;height:100%;object-fit:contain;">
+        </div>
+        <div class="cloud cloud1"></div>
+        <div class="cloud cloud2"></div>
+        <div class="cloud cloud3"></div>
+    </div>
     <button id="rotateBtn" title="回転">回転↻</button>
+    <button id="bgmToggle" title="BGM: オフ">BGM: オフ</button>
 <script>
 const { Engine, Render, Runner, Bodies, Composite, Vertices, Body, Events } = Matter;
 
@@ -152,7 +223,6 @@ const { Engine, Render, Runner, Bodies, Composite, Vertices, Body, Events } = Ma
     img.src = bgPath;
 })();
 
-// ★ 全画像をこのサイズ（長辺）に統一
 const BASE_SIZE = 120;
 
 const PROCESSED_PATHS = [
@@ -181,72 +251,64 @@ const UNPROCESSED_PATHS = [
     'src/img/iloveimg-converted/%E7%BF%94%E6%96%972.png',
     'src/img/iloveimg-converted/%E7%BF%94%E6%96%973.png',
 ];
-
-// 全画像をBASE_SIZEにリサイズ → 必要なら背景透過 → vertices抽出
-function prepareAnimal(img, bgRemove, sourcePath) {
-    // アスペクト比を維持してリサイズ後のサイズを計算
+function prepareAnimal(img, bgRemove) {
+    if (!img.naturalWidth || !img.naturalHeight) { console.warn('画像サイズ不正:', img.src); return null; }
     let tw, th;
     if (img.naturalWidth > img.naturalHeight) {
-        tw = BASE_SIZE;
-        th = Math.round(BASE_SIZE * img.naturalHeight / img.naturalWidth);
+        tw = BASE_SIZE; th = Math.round(BASE_SIZE * img.naturalHeight / img.naturalWidth);
     } else {
-        th = BASE_SIZE;
-        tw = Math.round(BASE_SIZE * img.naturalWidth / img.naturalHeight);
+        th = BASE_SIZE; tw = Math.round(BASE_SIZE * img.naturalWidth / img.naturalHeight);
     }
-
-    // 元サイズで描画して背景除去
-    const srcCanvas = document.createElement('canvas');
-    srcCanvas.width = img.naturalWidth;
-    srcCanvas.height = img.naturalHeight;
-    const srcCtx = srcCanvas.getContext('2d');
-    srcCtx.drawImage(img, 0, 0);
-
-    if (bgRemove) {
-        const id = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
-        const d = id.data;
-        const bgR = d[0], bgG = d[1], bgB = d[2];
-        for (let i = 0; i < d.length; i += 4) {
-            const diff = Math.sqrt(
-                Math.pow(d[i] - bgR, 2) +
-                Math.pow(d[i+1] - bgG, 2) +
-                Math.pow(d[i+2] - bgB, 2)
-            );
-            if (diff < 40) d[i+3] = 0;
+    let path = img.src, vertices = null;
+    try {
+        const srcCanvas = document.createElement('canvas');
+        srcCanvas.width = img.naturalWidth; srcCanvas.height = img.naturalHeight;
+        const srcCtx = srcCanvas.getContext('2d');
+        srcCtx.drawImage(img, 0, 0);
+        if (bgRemove) {
+            const id = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+            const d = id.data;
+            const bgR = d[0], bgG = d[1], bgB = d[2];
+            for (let i = 0; i < d.length; i += 4) {
+                const diff = Math.sqrt(Math.pow(d[i]-bgR,2)+Math.pow(d[i+1]-bgG,2)+Math.pow(d[i+2]-bgB,2));
+                if (diff < 40) d[i+3] = 0;
+            }
+            srcCtx.putImageData(id, 0, 0);
         }
-        srcCtx.putImageData(id, 0, 0);
+      
+        const dstCanvas = document.createElement('canvas');
+        dstCanvas.width = tw; dstCanvas.height = th;
+        const dstCtx = dstCanvas.getContext('2d');
+        dstCtx.drawImage(srcCanvas, 0, 0, tw, th);
+        const id2 = dstCtx.getImageData(0, 0, tw, th);
+        const d2 = id2.data;
+        const points = [];
+        for (let y = 0; y < th; y += 2)
+            for (let x = 0; x < tw; x += 2)
+                if (d2[(y * tw + x) * 4 + 3] > 0) points.push({ x, y });
+        
+        const vertices = points.length > 3 ? Vertices.hull(points) : null;
+
+        return {
+            sourcePath,
+            path: dstCanvas.toDataURL('image/png'),
+            vertices,
+            w: tw,
+            h: th
+        };
+    } catch(e) { 
+        console.warn('Canvas処理スキップ:', img.src, '-', e.message); 
+        return null;
     }
-
-    // BASE_SIZEにリサイズしたcanvasを作成（これがテクスチャになる）
-    const dstCanvas = document.createElement('canvas');
-    dstCanvas.width = tw;
-    dstCanvas.height = th;
-    const dstCtx = dstCanvas.getContext('2d');
-    dstCtx.drawImage(srcCanvas, 0, 0, tw, th);
-
-    // リサイズ後のcanvasからvertices抽出
-    const id2 = dstCtx.getImageData(0, 0, tw, th);
-    const d2 = id2.data;
-    const points = [];
-    for (let y = 0; y < th; y += 2) {
-        for (let x = 0; x < tw; x += 2) {
-            if (d2[(y * tw + x) * 4 + 3] > 0) points.push({ x, y });
-        }
-    }
-    const vertices = points.length > 3 ? Vertices.hull(points) : null;
-
-    return {
-        sourcePath,
-        path: dstCanvas.toDataURL('image/png'),
-        vertices,
-        w: tw,
-        h: th
-    };
 }
 
 const loadedImages = [];
+if (location.protocol === 'file:') console.warn('⚠️ file://で動作中。ローカルサーバー推奨: python -m http.server 8080');
+
 Promise.all([
     ...PROCESSED_PATHS.map(path => new Promise((resolve) => {
         const img = new Image();
+      
         img.onload = () => resolve(prepareAnimal(img, false, path));
         img.onerror = () => { console.warn('読み込み失敗:', path); resolve(null); };
         img.src = path;
@@ -260,24 +322,35 @@ Promise.all([
     })),
 ]).then(results => {
     loadedImages.push(...results.filter(Boolean));
+  
     console.log(`読み込み完了: ${loadedImages.length}枚`);
     prepareNextAnimal();
+
 });
 
 const engine = Engine.create();
+// 落下速度を少し遅くするために重力を弱める
+engine.world.gravity.y = 0.6;
 const render = Render.create({
-    element: document.body,
+    element: document.getElementById('game-container'),
     engine: engine,
     options: { width: 400, height: 600, wireframes: false, background: 'transparent' }
 });
 Render.run(render);
 Runner.run(Runner.create(), engine);
 
-const ground = Bodies.rectangle(200, 500, 200, 40, {
-    isStatic: true,
-    render: { fillStyle: '#4caf50' }
-});
+const ground = Bodies.rectangle(200, 500, 200, 40, { isStatic: true, render: { fillStyle: '#4caf50' } });
 Composite.add(engine.world, ground);
+
+let currentRotationDeg = 0, heldBody = null, heldIsArray = false, heldAnimal = null;
+const holdY = 50;
+const droppedBodies = [];
+const scoreDisplay = document.getElementById('score-display');
+
+setInterval(() => {
+    const stable = droppedBodies.filter(b => b.speed < 0.18 && Math.abs(b.angularVelocity) < 0.05 && b.position.y < 620);
+    scoreDisplay.textContent = `スコア: ${stable.length}`;
+}, 400);
 
 let currentRotationDeg = 0;
 let heldBody = null;
@@ -298,7 +371,6 @@ const DROP_MAX_SETTLE_ANGULAR_SPEED = 0.18;
 const FALL_UNLOCK_EXTRA_Y = 100;
 const TAP_MAX_MS = 350;
 const TAP_MOVE_TOLERANCE = 10;
-
 const rotateBtn = document.getElementById('rotateBtn');
 let fireworksTimer = null;
 
@@ -329,23 +401,19 @@ rotateBtn.addEventListener('click', (e) => {
     updateRotationButton();
     const angleRad = currentRotationDeg * Math.PI / 180;
     if (heldBody) {
-        if (heldIsArray) {
-            heldBody.forEach(b => Body.setAngle(b, angleRad));
-        } else {
-            Body.setAngle(heldBody, angleRad);
-        }
+        if (heldIsArray) heldBody.forEach(b => Body.setAngle(b, angleRad));
+        else Body.setAngle(heldBody, angleRad);
     }
 });
 
 function createAnimalBodyAt(animal, x, y, isStatic) {
-    // テクスチャはすでにBASE_SIZEに正規化済みなのでxScale/yScale = 1
     const opts = {
-        restitution: 0.1,
-        friction: 0.05,
+        restitution: 0,   // 【変更】0 にすることで全く跳ね返らなくなります（ピタッと止まる）
+        friction: 0.2,    // 【変更】摩擦を少し強め（0.05 ➔ 0.2）にして、滑り落ちにくくします
         isStatic: !!isStatic,
         render: { sprite: { texture: animal.path, xScale: 1, yScale: 1 } }
     };
-
+    
     if (animal.vertices && animal.vertices.length > 2) {
         const body = Bodies.fromVertices(x, y, animal.vertices, opts, true);
         return { body, targetWidth: animal.w, targetHeight: animal.h };
@@ -369,6 +437,9 @@ function setHeldPosition(clientX, clientY) {
     let x = point.x;
     if (x < 10) x = 10;
     if (x > render.options.width - 10) x = render.options.width - 10;
+    if (heldIsArray) heldBody.forEach(b => Body.setPosition(b, { x, y: holdY }));
+    else Body.setPosition(heldBody, { x, y: holdY });
+
     lastAimX = x;
     if (!heldBody) return true;
     if (heldIsArray) {
@@ -398,7 +469,17 @@ function startDropWatch(bodies, shouldPlayFireworks) {
         stoppedSince: null
     };
 }
-
+    if (heldBody) {
+        if (heldIsArray) {
+            heldBody.forEach(b => { Body.setStatic(b, false); Body.applyForce(b, b.position, { x: 0, y: 0.002 }); });
+            droppedBodies.push(...heldBody);
+        } else {
+            Body.setStatic(heldBody, false);
+            Body.applyForce(heldBody, heldBody.position, { x: 0, y: 0.002 });
+            droppedBodies.push(heldBody);
+        }
+        heldBody = null; heldAnimal = null; heldIsArray = false;
+        return;
 function hasBodyStopped(body) {
     const speed = Math.hypot(body.velocity.x, body.velocity.y);
     return speed <= DROP_STOP_SPEED && Math.abs(body.angularVelocity) <= DROP_STOP_ANGULAR_SPEED;
@@ -445,8 +526,7 @@ function prepareNextAnimal(x = lastAimX) {
     } else {
         Body.setAngle(body, angleRad);
         Composite.add(engine.world, body);
-        heldBody = body;
-        heldIsArray = false;
+        heldBody = body; heldIsArray = false;
     }
     heldAnimal = animal;
     lastAimX = spawnX;
@@ -543,6 +623,55 @@ render.canvas.addEventListener('pointercancel', (event) => {
     }
     if (render.canvas.releasePointerCapture) render.canvas.releasePointerCapture(event.pointerId);
 });
+
+const sunEl = document.querySelector('.sun');
+const cloudEls = Array.from(document.querySelectorAll('.cloud'));
+
+function isOverlappingRect(a, b) {
+    return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+}
+
+function updateCloudSunOverlap() {
+    if (!sunEl || cloudEls.length === 0) return;
+    const sunRect = sunEl.getBoundingClientRect();
+    cloudEls.forEach((cloud) => {
+        const cloudRect = cloud.getBoundingClientRect();
+        cloud.classList.toggle('is-over-sun', isOverlappingRect(cloudRect, sunRect));
+    });
+    requestAnimationFrame(updateCloudSunOverlap);
+}
+requestAnimationFrame(updateCloudSunOverlap);
+// BGM 制御
+(function(){
+    const bgmPath = 'src/audio/bgm.mp3';
+    const bgm = new Audio(bgmPath);
+    bgm.loop = true;
+    bgm.preload = 'auto';
+    bgm.volume = 0.5;
+    const btn = document.getElementById('bgmToggle');
+function updateBtn(){
+    const on = !bgm.paused;
+    const text = on ? 'BGM: オン' : 'BGM: オフ';
+    btn.textContent = text;
+    btn.title = text;
+    btn.setAttribute('aria-pressed', on.toString());
+}
+    btn.addEventListener('click', ()=>{
+        if (bgm.paused) {
+            bgm.play().catch((e)=>{
+                console.warn('BGMの再生がブロックされました。ユーザー操作で再生してください。', e);
+            });
+        } else {
+            bgm.pause();
+        }
+        updateBtn();
+    });
+    // 簡易チェック: ファイル存在をHEADで確認
+    try {
+        fetch(bgmPath, { method: 'HEAD' }).then(res => { if (!res.ok) console.warn('BGMファイルが見つかりません: ' + bgmPath); }).catch(() => console.warn('BGMチェック失敗: ' + bgmPath));
+    } catch(e) { console.warn('BGMチェックスキップ', e); }
+    updateBtn();
+})();
 </script>
 </body>
 </html>
