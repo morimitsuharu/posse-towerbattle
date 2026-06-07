@@ -77,6 +77,13 @@
         }
         #rotateBtn:active { transform: translateX(-50%) scale(0.98); }
 
+        #bgmToggle {
+            position: fixed; right: 16px; bottom: calc(18px + var(--safe-bottom));
+            padding: 10px 14px; background: #fff; border-radius: 12px; border: 2px solid #90caf9;
+            color: #1565c0; font-weight: 700; z-index: 9999; cursor: pointer; box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+            -webkit-tap-highlight-color: transparent;
+        }
+
         @media (max-width: 480px) {
             body {
                 padding: max(10px, env(safe-area-inset-top, 0px)) 8px calc(92px + var(--safe-bottom));
@@ -104,6 +111,7 @@
         <div class="cloud cloud3"></div>
     </div>
     <button id="rotateBtn" title="回転">回転↻</button>
+    <button id="bgmToggle" title="BGM: オフ">BGM: オフ</button>
 <script>
 const { Engine, Render, Runner, Bodies, Composite, Vertices, Body } = Matter;
 
@@ -330,6 +338,31 @@ function updateCloudSunOverlap() {
     requestAnimationFrame(updateCloudSunOverlap);
 }
 requestAnimationFrame(updateCloudSunOverlap);
+// BGM 制御
+(function(){
+    const bgmPath = 'src/audio/bgm.mp3';
+    const bgm = new Audio(bgmPath);
+    bgm.loop = true;
+    bgm.preload = 'auto';
+    bgm.volume = 0.5;
+    const btn = document.getElementById('bgmToggle');
+    function updateBtn(){ btn.textContent = bgm.paused ? 'BGM: オフ' : 'BGM: オン'; btn.setAttribute('aria-pressed', (!bgm.paused).toString()); }
+    btn.addEventListener('click', ()=>{
+        if (bgm.paused) {
+            bgm.play().catch((e)=>{
+                console.warn('BGMの再生がブロックされました。ユーザー操作で再生してください。', e);
+            });
+        } else {
+            bgm.pause();
+        }
+        updateBtn();
+    });
+    // 簡易チェック: ファイル存在をHEADで確認
+    try {
+        fetch(bgmPath, { method: 'HEAD' }).then(res => { if (!res.ok) console.warn('BGMファイルが見つかりません: ' + bgmPath); }).catch(() => console.warn('BGMチェック失敗: ' + bgmPath));
+    } catch(e) { console.warn('BGMチェックスキップ', e); }
+    updateBtn();
+})();
 </script>
 </body>
 </html>
