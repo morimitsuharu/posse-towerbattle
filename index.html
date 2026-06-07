@@ -3,23 +3,117 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="icon" type="image/png" href="src/img/favicon.png">
+    <link rel="apple-touch-icon" href="src/img/apple-touch-icon.png">
     <title>ミニ動物タワーバトル</title>
     <script src="https://cdn.jsdelivr.net/npm/pathseg@1.2.1/pathseg.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
-        :root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
+        :root {
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --firework-burst-top: 48%;
+            --firework-launch-distance: 43dvh;
+        }
         * { box-sizing: border-box; }
         html, body { width: 100%; height: 100%; overflow: hidden; }
         body {
+            position: relative; isolation: isolate;
             margin: 0; padding: max(12px, env(safe-area-inset-top, 0px)) 12px calc(84px + var(--safe-bottom));
             background: linear-gradient(180deg,#66d9ff 0%,#a7f0ff 100%);
             display: flex; justify-content: center; align-items: center; min-height: 100vh; min-height: 100dvh;
             overscroll-behavior: none; touch-action: none;
         }
+        body.fireworks-active {
+            background: #000 !important;
+        }
+        body::before {
+            content: ""; position: fixed; left: 50%; top: var(--firework-burst-top);
+            width: min(92vw, 980px, 114dvh); aspect-ratio: 3 / 2;
+            z-index: 0; pointer-events: none; opacity: 0;
+            background: url('src/img/fireworks-transparent.png') center center / contain no-repeat;
+            filter:
+                drop-shadow(0 0 9px rgba(255, 255, 255, 0.85))
+                drop-shadow(0 0 22px rgba(255, 39, 158, 0.82))
+                drop-shadow(0 0 42px rgba(255, 39, 158, 0.38));
+            transform: translate(-50%, -50%) scale(0.82); transform-origin: center center;
+            will-change: opacity, transform;
+        }
+        body::after {
+            content: ""; position: fixed; left: 50%; top: var(--firework-burst-top);
+            width: 7px; height: 7px; border-radius: 999px; z-index: 0; pointer-events: none;
+            opacity: 0; background: #fff9ff;
+            box-shadow:
+                0 14px 0 rgba(255, 72, 184, 0.95),
+                0 28px 0 rgba(255, 72, 184, 0.72),
+                0 42px 0 rgba(255, 72, 184, 0.48),
+                0 56px 0 rgba(255, 72, 184, 0.24),
+                0 0 14px rgba(255, 255, 255, 0.88),
+                0 0 24px rgba(255, 35, 164, 0.75);
+            transform: translate(-50%, var(--firework-launch-distance)) scale(0.7);
+            will-change: opacity, transform, box-shadow;
+        }
         canvas {
+            position: relative; z-index: 2;
             display: block; width: min(100%, 400px); height: auto;
             max-height: calc(100dvh - 108px - var(--safe-bottom));
             box-shadow: 0 10px 30px rgba(0,0,0,0.1); background: transparent;
+        }
+        body.fireworks-active::before {
+            animation: fireworksTextReveal 5400ms ease-out forwards;
+        }
+        body.fireworks-active::after {
+            animation: fireworkLaunch 5400ms ease-out forwards;
+        }
+        @keyframes fireworkLaunch {
+            0% {
+                opacity: 0; transform: translate(-50%, var(--firework-launch-distance)) scale(0.65);
+                box-shadow:
+                    0 14px 0 rgba(255, 72, 184, 0.92),
+                    0 28px 0 rgba(255, 72, 184, 0.68),
+                    0 42px 0 rgba(255, 72, 184, 0.44),
+                    0 56px 0 rgba(255, 72, 184, 0.22),
+                    0 0 14px rgba(255, 255, 255, 0.88),
+                    0 0 24px rgba(255, 35, 164, 0.75);
+            }
+            8% { opacity: 1; }
+            42% {
+                opacity: 1; transform: translate(-50%, 0) scale(0.95);
+                box-shadow:
+                    0 16px 0 rgba(255, 72, 184, 0.86),
+                    0 32px 0 rgba(255, 72, 184, 0.58),
+                    0 48px 0 rgba(255, 72, 184, 0.32),
+                    0 64px 0 rgba(255, 72, 184, 0.14),
+                    0 0 18px rgba(255, 255, 255, 0.95),
+                    0 0 32px rgba(255, 35, 164, 0.9);
+            }
+            54% {
+                opacity: 1; transform: translate(-50%, 0) scale(1.65);
+                box-shadow:
+                    0 -70px 0 rgba(255, 255, 255, 0.95),
+                    61px -35px 0 rgba(255, 66, 176, 0.9),
+                    61px 35px 0 rgba(255, 110, 203, 0.78),
+                    0 70px 0 rgba(255, 255, 255, 0.78),
+                    -61px 35px 0 rgba(255, 66, 176, 0.9),
+                    -61px -35px 0 rgba(255, 110, 203, 0.78);
+            }
+            68% {
+                opacity: 0.65; transform: translate(-50%, 0) scale(2.55);
+                box-shadow:
+                    0 -96px 0 rgba(255, 255, 255, 0.35),
+                    83px -48px 0 rgba(255, 66, 176, 0.3),
+                    83px 48px 0 rgba(255, 110, 203, 0.25),
+                    0 96px 0 rgba(255, 255, 255, 0.22),
+                    -83px 48px 0 rgba(255, 66, 176, 0.3),
+                    -83px -48px 0 rgba(255, 110, 203, 0.25);
+            }
+            84%, 100% { opacity: 0; transform: translate(-50%, 0) scale(2.8); }
+        }
+        @keyframes fireworksTextReveal {
+            0%, 52% { opacity: 0; transform: translate(-50%, -50%) scale(0.78); }
+            58% { opacity: 0; transform: translate(-50%, -50%) scale(0.86); }
+            66% { opacity: 1; transform: translate(-50%, -50%) scale(1.04); }
+            82% { opacity: 1; transform: translate(-50%, -50%) scale(1.02); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.07); }
         }
         #rotateBtn {
             position: fixed; left: 50%; transform: translateX(-50%);
@@ -79,6 +173,9 @@ const PROCESSED_PATHS = [
     'src/img/iloveimg-converted/shoto.png15.png',
 ];
 
+const FIREWORK_TRIGGER_PATH = 'src/img/iloveimg-converted/shoto.png5.png';
+const FIREWORK_EFFECT_MS = 5500;
+
 const UNPROCESSED_PATHS = [
     'src/img/iloveimg-converted/%E7%BF%94%E6%96%971.png',
     'src/img/iloveimg-converted/%E7%BF%94%E6%96%972.png',
@@ -86,7 +183,7 @@ const UNPROCESSED_PATHS = [
 ];
 
 // 全画像をBASE_SIZEにリサイズ → 必要なら背景透過 → vertices抽出
-function prepareAnimal(img, bgRemove) {
+function prepareAnimal(img, bgRemove, sourcePath) {
     // アスペクト比を維持してリサイズ後のサイズを計算
     let tw, th;
     if (img.naturalWidth > img.naturalHeight) {
@@ -138,6 +235,7 @@ function prepareAnimal(img, bgRemove) {
     const vertices = points.length > 3 ? Vertices.hull(points) : null;
 
     return {
+        sourcePath,
         path: dstCanvas.toDataURL('image/png'),
         vertices,
         w: tw,
@@ -149,14 +247,14 @@ const loadedImages = [];
 Promise.all([
     ...PROCESSED_PATHS.map(path => new Promise((resolve) => {
         const img = new Image();
-        img.onload = () => resolve(prepareAnimal(img, false));
+        img.onload = () => resolve(prepareAnimal(img, false, path));
         img.onerror = () => { console.warn('読み込み失敗:', path); resolve(null); };
         img.src = path;
     })),
     ...UNPROCESSED_PATHS.map(path => new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(prepareAnimal(img, true));
+        img.onload = () => resolve(prepareAnimal(img, true, path));
         img.onerror = () => { console.warn('読み込み失敗:', path); resolve(null); };
         img.src = path;
     })),
@@ -191,14 +289,31 @@ let lastAimX = 200;
 const holdY = 50;
 const DROP_FORCE_Y = 0.002;
 const DROP_MIN_SETTLE_MS = 700;
-const DROP_STOP_HOLD_MS = 600;
-const DROP_STOP_SPEED = 0.25;
-const DROP_STOP_ANGULAR_SPEED = 0.025;
+const DROP_STOP_HOLD_MS = 350;
+const DROP_STOP_SPEED = 0.6;
+const DROP_STOP_ANGULAR_SPEED = 0.08;
+const DROP_MAX_SETTLE_MS = 4200;
+const DROP_MAX_SETTLE_SPEED = 1.2;
+const DROP_MAX_SETTLE_ANGULAR_SPEED = 0.18;
 const FALL_UNLOCK_EXTRA_Y = 100;
 const TAP_MAX_MS = 350;
 const TAP_MOVE_TOLERANCE = 10;
 
 const rotateBtn = document.getElementById('rotateBtn');
+let fireworksTimer = null;
+
+function playFireworksEffect() {
+    clearTimeout(fireworksTimer);
+    document.body.classList.remove('fireworks-active');
+    void document.body.offsetWidth;
+    document.body.classList.add('fireworks-active');
+
+    fireworksTimer = setTimeout(() => {
+        document.body.classList.remove('fireworks-active');
+        fireworksTimer = null;
+    }, FIREWORK_EFFECT_MS);
+}
+
 function updateRotationButton() {
     rotateBtn.textContent = currentRotationDeg === 0 ? '回転↻' : `回転↻ (${currentRotationDeg}°)`;
 }
@@ -275,9 +390,10 @@ function clearHeldBody() {
     heldIsArray = false;
 }
 
-function startDropWatch(bodies) {
+function startDropWatch(bodies, shouldPlayFireworks) {
     dropWatch = {
         bodies,
+        shouldPlayFireworks,
         releasedAt: performance.now(),
         stoppedSince: null
     };
@@ -288,14 +404,22 @@ function hasBodyStopped(body) {
     return speed <= DROP_STOP_SPEED && Math.abs(body.angularVelocity) <= DROP_STOP_ANGULAR_SPEED;
 }
 
+function hasBodyMostlySettled(body) {
+    const speed = Math.hypot(body.velocity.x, body.velocity.y);
+    return speed <= DROP_MAX_SETTLE_SPEED && Math.abs(body.angularVelocity) <= DROP_MAX_SETTLE_ANGULAR_SPEED;
+}
+
 function hasBodyFallen(body) {
     return body.bounds.min.y > render.options.height + FALL_UNLOCK_EXTRA_Y;
 }
 
 function finishDropWatch(removeBodies) {
     const bodies = dropWatch.bodies;
+    const shouldPlayFireworks = dropWatch.shouldPlayFireworks;
     if (removeBodies) {
         bodies.forEach(body => Composite.remove(engine.world, body));
+    } else if (shouldPlayFireworks) {
+        playFireworksEffect();
     }
     dropWatch = null;
     prepareNextAnimal();
@@ -332,12 +456,13 @@ function prepareNextAnimal(x = lastAimX) {
 function dropHeldBody() {
     if (!heldBody || dropWatch) return false;
 
+    const shouldPlayFireworks = heldAnimal && heldAnimal.sourcePath === FIREWORK_TRIGGER_PATH;
     const droppedBodies = toBodyList(heldBody);
     droppedBodies.forEach(b => {
         Body.setStatic(b, false);
         Body.applyForce(b, b.position, { x: 0, y: DROP_FORCE_Y });
     });
-    startDropWatch(droppedBodies);
+    startDropWatch(droppedBodies, shouldPlayFireworks);
     clearHeldBody();
     resetRotation();
     return true;
@@ -368,6 +493,8 @@ Events.on(engine, 'afterUpdate', () => {
     if (bodies.every(hasBodyStopped)) {
         if (dropWatch.stoppedSince === null) dropWatch.stoppedSince = now;
         if (now - dropWatch.stoppedSince >= DROP_STOP_HOLD_MS) finishDropWatch(false);
+    } else if (now - dropWatch.releasedAt >= DROP_MAX_SETTLE_MS && bodies.every(hasBodyMostlySettled)) {
+        finishDropWatch(false);
     } else {
         dropWatch.stoppedSince = null;
     }
