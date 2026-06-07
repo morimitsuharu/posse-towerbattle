@@ -211,6 +211,8 @@ Promise.all([
 });
 
 const engine = Engine.create();
+// 落下速度を少し遅くするために重力を弱める
+engine.world.gravity.y = 0.6;
 const render = Render.create({
     element: document.getElementById('game-container'),
     engine: engine,
@@ -246,9 +248,12 @@ rotateBtn.addEventListener('click', (e) => {
 
 function createAnimalBodyAt(animal, x, y, isStatic) {
     const opts = {
-        restitution: 0.1, friction: 0.05, isStatic: !!isStatic,
+        restitution: 0,   // 【変更】0 にすることで全く跳ね返らなくなります（ピタッと止まる）
+        friction: 0.2,    // 【変更】摩擦を少し強め（0.05 ➔ 0.2）にして、滑り落ちにくくします
+        isStatic: !!isStatic,
         render: { sprite: { texture: animal.path, xScale: 1, yScale: 1 } }
     };
+    
     if (animal.vertices && animal.vertices.length > 2) {
         const body = Bodies.fromVertices(x, y, animal.vertices, opts, true);
         return { body, targetWidth: animal.w, targetHeight: animal.h };
