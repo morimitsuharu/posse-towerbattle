@@ -649,7 +649,13 @@ requestAnimationFrame(updateCloudSunOverlap);
     bgm.preload = 'auto';
     bgm.volume = 0.5;
     const btn = document.getElementById('bgmToggle');
-    function updateBtn(){ btn.textContent = bgm.paused ? 'BGM: オフ' : 'BGM: オン'; btn.setAttribute('aria-pressed', (!bgm.paused).toString()); }
+function updateBtn(){
+    const on = !bgm.paused;
+    const text = on ? 'BGM: オン' : 'BGM: オフ';
+    btn.textContent = text;
+    btn.title = text;
+    btn.setAttribute('aria-pressed', on.toString());
+}
     btn.addEventListener('click', ()=>{
         if (bgm.paused) {
             bgm.play().catch((e)=>{
