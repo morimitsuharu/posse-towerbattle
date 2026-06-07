@@ -48,7 +48,7 @@
 <body>
     <button id="rotateBtn" title="回転">回転↻</button>
 <script>
-const { Engine, Render, Runner, Bodies, Composite, Vertices, Body } = Matter;
+const { Engine, Render, Runner, Bodies, Composite, Vertices, Body, Events } = Matter;
 
 (function() {
     const bgPath = 'src/img/background.png';
@@ -163,6 +163,7 @@ Promise.all([
 ]).then(results => {
     loadedImages.push(...results.filter(Boolean));
     console.log(`読み込み完了: ${loadedImages.length}枚`);
+    prepareNextAnimal();
 });
 
 const engine = Engine.create();
@@ -184,7 +185,18 @@ let currentRotationDeg = 0;
 let heldBody = null;
 let heldIsArray = false;
 let heldAnimal = null;
+let dropWatch = null;
+let activePointer = null;
+let lastAimX = 200;
 const holdY = 50;
+const DROP_FORCE_Y = 0.002;
+const DROP_MIN_SETTLE_MS = 700;
+const DROP_STOP_HOLD_MS = 600;
+const DROP_STOP_SPEED = 0.25;
+const DROP_STOP_ANGULAR_SPEED = 0.025;
+const FALL_UNLOCK_EXTRA_Y = 100;
+const TAP_MAX_MS = 350;
+const TAP_MOVE_TOLERANCE = 10;
 
 const rotateBtn = document.getElementById('rotateBtn');
 rotateBtn.addEventListener('click', (e) => {
@@ -228,63 +240,170 @@ function getCanvasPoint(clientX, clientY) {
 }
 
 function setHeldPosition(clientX, clientY) {
-    if (!heldBody) return;
     const point = getCanvasPoint(clientX, clientY);
-    if (!point) return;
+    if (!point) return false;
     let x = point.x;
     if (x < 10) x = 10;
     if (x > render.options.width - 10) x = render.options.width - 10;
+    lastAimX = x;
+    if (!heldBody) return true;
     if (heldIsArray) {
         heldBody.forEach(b => Body.setPosition(b, { x, y: holdY }));
     } else {
         Body.setPosition(heldBody, { x, y: holdY });
     }
+    return true;
 }
 
-render.canvas.addEventListener('mousemove', (e) => setHeldPosition(e.clientX, e.clientY));
-render.canvas.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    if (e.touches && e.touches[0]) setHeldPosition(e.touches[0].clientX, e.touches[0].clientY);
-}, { passive: false });
+function toBodyList(body) {
+    if (Array.isArray(body)) return body.filter(Boolean);
+    return body ? [body] : [];
+}
 
-render.canvas.addEventListener('click', (event) => {
-    const point = getCanvasPoint(event.clientX, event.clientY);
-    if (!point) return;
-    const mouseX = point.x;
+function clearHeldBody() {
+    heldBody = null;
+    heldAnimal = null;
+    heldIsArray = false;
+}
 
-    if (loadedImages.length === 0) {
-        console.warn('画像がまだ読み込まれていません');
-        return;
+function startDropWatch(bodies) {
+    dropWatch = {
+        bodies,
+        releasedAt: performance.now(),
+        stoppedSince: null
+    };
+}
+
+function hasBodyStopped(body) {
+    const speed = Math.hypot(body.velocity.x, body.velocity.y);
+    return speed <= DROP_STOP_SPEED && Math.abs(body.angularVelocity) <= DROP_STOP_ANGULAR_SPEED;
+}
+
+function hasBodyFallen(body) {
+    return body.bounds.min.y > render.options.height + FALL_UNLOCK_EXTRA_Y;
+}
+
+function finishDropWatch(removeBodies) {
+    const bodies = dropWatch.bodies;
+    if (removeBodies) {
+        bodies.forEach(body => Composite.remove(engine.world, body));
     }
+    dropWatch = null;
+    prepareNextAnimal();
+}
 
-    if (heldBody) {
-        if (heldIsArray) {
-            heldBody.forEach(b => { Body.setStatic(b, false); Body.applyForce(b, b.position, { x: 0, y: 0.002 }); });
-        } else {
-            Body.setStatic(heldBody, false);
-            Body.applyForce(heldBody, heldBody.position, { x: 0, y: 0.002 });
-        }
-        heldBody = null;
-        heldAnimal = null;
-        heldIsArray = false;
-        return;
-    }
+function prepareNextAnimal(x = lastAimX) {
+    if (heldBody || dropWatch || loadedImages.length === 0) return false;
 
     const animal = loadedImages[Math.floor(Math.random() * loadedImages.length)];
-    const { body } = createAnimalBodyAt(animal, mouseX, holdY, true);
-    if (!body) return;
+    const spawnX = Math.max(10, Math.min(render.options.width - 10, x));
+    const { body } = createAnimalBodyAt(animal, spawnX, holdY, true);
+    if (!body) return false;
 
+    const angleRad = currentRotationDeg * Math.PI / 180;
     if (Array.isArray(body)) {
-        body.forEach(b => { Body.setAngle(b, currentRotationDeg * Math.PI / 180); Composite.add(engine.world, b); });
+        body.forEach(b => {
+            Body.setAngle(b, angleRad);
+            Composite.add(engine.world, b);
+        });
         heldBody = body;
         heldIsArray = true;
     } else {
-        Body.setAngle(body, currentRotationDeg * Math.PI / 180);
+        Body.setAngle(body, angleRad);
         Composite.add(engine.world, body);
         heldBody = body;
         heldIsArray = false;
     }
     heldAnimal = animal;
+    lastAimX = spawnX;
+    return true;
+}
+
+function dropHeldBody() {
+    if (!heldBody || dropWatch) return false;
+
+    const droppedBodies = toBodyList(heldBody);
+    droppedBodies.forEach(b => {
+        Body.setStatic(b, false);
+        Body.applyForce(b, b.position, { x: 0, y: DROP_FORCE_Y });
+    });
+    startDropWatch(droppedBodies);
+    clearHeldBody();
+    return true;
+}
+
+Events.on(engine, 'afterUpdate', () => {
+    if (!dropWatch) return;
+
+    const now = performance.now();
+    const bodies = dropWatch.bodies.filter(body => Composite.get(engine.world, body.id, 'body'));
+    if (bodies.length === 0) {
+        dropWatch = null;
+        prepareNextAnimal();
+        return;
+    }
+    dropWatch.bodies = bodies;
+
+    if (bodies.every(hasBodyFallen)) {
+        finishDropWatch(true);
+        return;
+    }
+
+    if (now - dropWatch.releasedAt < DROP_MIN_SETTLE_MS) {
+        dropWatch.stoppedSince = null;
+        return;
+    }
+
+    if (bodies.every(hasBodyStopped)) {
+        if (dropWatch.stoppedSince === null) dropWatch.stoppedSince = now;
+        if (now - dropWatch.stoppedSince >= DROP_STOP_HOLD_MS) finishDropWatch(false);
+    } else {
+        dropWatch.stoppedSince = null;
+    }
+});
+
+render.canvas.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    setHeldPosition(event.clientX, event.clientY);
+    activePointer = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        startedAt: performance.now(),
+        moved: false
+    };
+    if (render.canvas.setPointerCapture) render.canvas.setPointerCapture(event.pointerId);
+});
+
+render.canvas.addEventListener('pointermove', (event) => {
+    event.preventDefault();
+    setHeldPosition(event.clientX, event.clientY);
+
+    if (!activePointer || activePointer.id !== event.pointerId) return;
+    const dx = event.clientX - activePointer.x;
+    const dy = event.clientY - activePointer.y;
+    if (Math.hypot(dx, dy) > TAP_MOVE_TOLERANCE) {
+        activePointer.moved = true;
+    }
+});
+
+render.canvas.addEventListener('pointerup', (event) => {
+    event.preventDefault();
+    setHeldPosition(event.clientX, event.clientY);
+
+    if (!activePointer || activePointer.id !== event.pointerId) return;
+    const elapsed = performance.now() - activePointer.startedAt;
+    const shouldDrop = !activePointer.moved && elapsed <= TAP_MAX_MS;
+    activePointer = null;
+    if (render.canvas.releasePointerCapture) render.canvas.releasePointerCapture(event.pointerId);
+    if (shouldDrop) dropHeldBody();
+});
+
+render.canvas.addEventListener('pointercancel', (event) => {
+    if (activePointer && activePointer.id === event.pointerId) {
+        activePointer = null;
+    }
+    if (render.canvas.releasePointerCapture) render.canvas.releasePointerCapture(event.pointerId);
 });
 </script>
 </body>
