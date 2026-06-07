@@ -17,7 +17,6 @@
         * { box-sizing: border-box; }
         html, body { width: 100%; height: 100%; overflow: hidden; }
         body {
-
             position: relative; isolation: isolate;
             margin: 0; padding: max(12px, env(safe-area-inset-top, 0px)) 12px calc(84px + var(--safe-bottom));
             background: linear-gradient(180deg,#66d9ff 0%,#a7f0ff 100%);
@@ -251,7 +250,8 @@ const UNPROCESSED_PATHS = [
     'src/img/iloveimg-converted/%E7%BF%94%E6%96%972.png',
     'src/img/iloveimg-converted/%E7%BF%94%E6%96%973.png',
 ];
-function prepareAnimal(img, bgRemove) {
+
+function prepareAnimal(img, bgRemove, sourcePath) {
     if (!img.naturalWidth || !img.naturalHeight) { console.warn('画像サイズ不正:', img.src); return null; }
     let tw, th;
     if (img.naturalWidth > img.naturalHeight) {
@@ -259,7 +259,7 @@ function prepareAnimal(img, bgRemove) {
     } else {
         th = BASE_SIZE; tw = Math.round(BASE_SIZE * img.naturalWidth / img.naturalHeight);
     }
-    let path = img.src, vertices = null;
+    let vertices = null;
     try {
         const srcCanvas = document.createElement('canvas');
         srcCanvas.width = img.naturalWidth; srcCanvas.height = img.naturalHeight;
@@ -287,7 +287,7 @@ function prepareAnimal(img, bgRemove) {
             for (let x = 0; x < tw; x += 2)
                 if (d2[(y * tw + x) * 4 + 3] > 0) points.push({ x, y });
         
-        const vertices = points.length > 3 ? Vertices.hull(points) : null;
+        vertices = points.length > 3 ? Vertices.hull(points) : null;
 
         return {
             sourcePath,
@@ -308,7 +308,6 @@ if (location.protocol === 'file:') console.warn('⚠️ file://で動作中。�
 Promise.all([
     ...PROCESSED_PATHS.map(path => new Promise((resolve) => {
         const img = new Image();
-      
         img.onload = () => resolve(prepareAnimal(img, false, path));
         img.onerror = () => { console.warn('読み込み失敗:', path); resolve(null); };
         img.src = path;
@@ -322,36 +321,26 @@ Promise.all([
     })),
 ]).then(results => {
     loadedImages.push(...results.filter(Boolean));
-  
     console.log(`読み込み完了: ${loadedImages.length}枚`);
     prepareNextAnimal();
-
 });
 
 const engine = Engine.create();
-// 落下速度を少し遅くするために重力を弱める
-engine.world.gravity.y = 0.6;
+// 落下速度の調整（0.3 = ゆっくり）
+engine.world.gravity.y = 0.3;
 const render = Render.create({
     element: document.getElementById('game-container'),
     engine: engine,
     options: { width: 400, height: 600, wireframes: false, background: 'transparent' }
 });
 Render.run(render);
-Runner.run(Runner.create(), engine);
+const runner = Runner.create();
+Runner.run(runner, engine);
 
 const ground = Bodies.rectangle(200, 500, 200, 40, { isStatic: true, render: { fillStyle: '#4caf50' } });
 Composite.add(engine.world, ground);
 
-let currentRotationDeg = 0, heldBody = null, heldIsArray = false, heldAnimal = null;
-const holdY = 50;
-const droppedBodies = [];
-const scoreDisplay = document.getElementById('score-display');
-
-setInterval(() => {
-    const stable = droppedBodies.filter(b => b.speed < 0.18 && Math.abs(b.angularVelocity) < 0.05 && b.position.y < 620);
-    scoreDisplay.textContent = `スコア: ${stable.length}`;
-}, 400);
-
+// ゲーム管理用の変数（一本化）
 let currentRotationDeg = 0;
 let heldBody = null;
 let heldIsArray = false;
@@ -360,6 +349,7 @@ let dropWatch = null;
 let activePointer = null;
 let lastAimX = 200;
 const holdY = 50;
+
 const DROP_FORCE_Y = 0.002;
 const DROP_MIN_SETTLE_MS = 700;
 const DROP_STOP_HOLD_MS = 350;
@@ -371,8 +361,17 @@ const DROP_MAX_SETTLE_ANGULAR_SPEED = 0.18;
 const FALL_UNLOCK_EXTRA_Y = 100;
 const TAP_MAX_MS = 350;
 const TAP_MOVE_TOLERANCE = 10;
+
 const rotateBtn = document.getElementById('rotateBtn');
+const scoreDisplay = document.getElementById('score-display');
 let fireworksTimer = null;
+
+// スコア計算（静止しているオブジェクトをカウント）
+setInterval(() => {
+    const allBodies = Composite.allBodies(engine.world);
+    const stable = allBodies.filter(b => b !== ground && b.speed < 0.18 && Math.abs(b.angularVelocity) < 0.05 && b.position.y < 620);
+    scoreDisplay.textContent = `スコア: ${stable.length}`;
+}, 400);
 
 function playFireworksEffect() {
     clearTimeout(fireworksTimer);
@@ -408,8 +407,8 @@ rotateBtn.addEventListener('click', (e) => {
 
 function createAnimalBodyAt(animal, x, y, isStatic) {
     const opts = {
-        restitution: 0,   // 【変更】0 にすることで全く跳ね返らなくなります（ピタッと止まる）
-        friction: 0.2,    // 【変更】摩擦を少し強め（0.05 ➔ 0.2）にして、滑り落ちにくくします
+        restitution: 0,   // 反発なし（ピタッと止まる）
+        friction: 0.2,    // 摩擦強め（滑り落ちにくい）
         isStatic: !!isStatic,
         render: { sprite: { texture: animal.path, xScale: 1, yScale: 1 } }
     };
@@ -437,9 +436,6 @@ function setHeldPosition(clientX, clientY) {
     let x = point.x;
     if (x < 10) x = 10;
     if (x > render.options.width - 10) x = render.options.width - 10;
-    if (heldIsArray) heldBody.forEach(b => Body.setPosition(b, { x, y: holdY }));
-    else Body.setPosition(heldBody, { x, y: holdY });
-
     lastAimX = x;
     if (!heldBody) return true;
     if (heldIsArray) {
@@ -469,17 +465,7 @@ function startDropWatch(bodies, shouldPlayFireworks) {
         stoppedSince: null
     };
 }
-    if (heldBody) {
-        if (heldIsArray) {
-            heldBody.forEach(b => { Body.setStatic(b, false); Body.applyForce(b, b.position, { x: 0, y: 0.002 }); });
-            droppedBodies.push(...heldBody);
-        } else {
-            Body.setStatic(heldBody, false);
-            Body.applyForce(heldBody, heldBody.position, { x: 0, y: 0.002 });
-            droppedBodies.push(heldBody);
-        }
-        heldBody = null; heldAnimal = null; heldIsArray = false;
-        return;
+
 function hasBodyStopped(body) {
     const speed = Math.hypot(body.velocity.x, body.velocity.y);
     return speed <= DROP_STOP_SPEED && Math.abs(body.angularVelocity) <= DROP_STOP_ANGULAR_SPEED;
@@ -537,18 +523,58 @@ function dropHeldBody() {
     if (!heldBody || dropWatch) return false;
 
     const shouldPlayFireworks = heldAnimal && heldAnimal.sourcePath === FIREWORK_TRIGGER_PATH;
-    const droppedBodies = toBodyList(heldBody);
-    droppedBodies.forEach(b => {
+    const droppedBodiesList = toBodyList(heldBody);
+    droppedBodiesList.forEach(b => {
         Body.setStatic(b, false);
         Body.applyForce(b, b.position, { x: 0, y: DROP_FORCE_Y });
     });
-    startDropWatch(droppedBodies, shouldPlayFireworks);
+    startDropWatch(droppedBodiesList, shouldPlayFireworks);
     clearHeldBody();
     resetRotation();
     return true;
 }
 
+let isGameOver = false;
+
+function triggerGameOver() {
+    if (isGameOver) return;
+    isGameOver = true;
+
+    try { Runner.stop(runner); } catch(e) {}
+    try { Render.stop(render); } catch(e) {}
+
+    const container = document.getElementById('game-container');
+    const overlay = document.createElement('div');
+    overlay.id = 'game-over-overlay';
+    Object.assign(overlay.style, {
+        position: 'absolute', left: '0', top: '0', width: '100%', height: '100%',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column', gap: '18px', zIndex: 9999,
+        background: 'rgba(0,0,0,0.6)', color: '#fff', fontFamily: 'sans-serif'
+    });
+    const title = document.createElement('div');
+    title.textContent = 'GAME OVER';
+    title.style.fontSize = '36px';
+    title.style.fontWeight = '800';
+    const btn = document.createElement('button');
+    btn.textContent = 'リトライ';
+    Object.assign(btn.style, { padding: '10px 18px', fontSize: '16px', borderRadius: '8px', cursor: 'pointer' });
+    btn.addEventListener('click', () => { location.reload(); });
+    overlay.appendChild(title);
+    overlay.appendChild(btn);
+    container.appendChild(overlay);
+}
+
 Events.on(engine, 'afterUpdate', () => {
+    // どれか一つでも土台から落ちたらゲームオーバー
+    if (!isGameOver) {
+        const allBodies = Composite.allBodies(engine.world).filter(b => b !== ground);
+        if (allBodies.some(hasBodyFallen)) {
+            triggerGameOver();
+            return;
+        }
+    }
+
     if (!dropWatch) return;
 
     const now = performance.now();
@@ -641,6 +667,7 @@ function updateCloudSunOverlap() {
     requestAnimationFrame(updateCloudSunOverlap);
 }
 requestAnimationFrame(updateCloudSunOverlap);
+
 // BGM 制御
 (function(){
     const bgmPath = 'src/audio/bgm.mp3';
@@ -649,13 +676,13 @@ requestAnimationFrame(updateCloudSunOverlap);
     bgm.preload = 'auto';
     bgm.volume = 0.5;
     const btn = document.getElementById('bgmToggle');
-function updateBtn(){
-    const on = !bgm.paused;
-    const text = on ? 'BGM: オン' : 'BGM: オフ';
-    btn.textContent = text;
-    btn.title = text;
-    btn.setAttribute('aria-pressed', on.toString());
-}
+    function updateBtn(){
+        const on = !bgm.paused;
+        const text = on ? 'BGM: オン' : 'BGM: オフ';
+        btn.textContent = text;
+        btn.title = text;
+        btn.setAttribute('aria-pressed', on.toString());
+    }
     btn.addEventListener('click', ()=>{
         if (bgm.paused) {
             bgm.play().catch((e)=>{
@@ -666,7 +693,6 @@ function updateBtn(){
         }
         updateBtn();
     });
-    // 簡易チェック: ファイル存在をHEADで確認
     try {
         fetch(bgmPath, { method: 'HEAD' }).then(res => { if (!res.ok) console.warn('BGMファイルが見つかりません: ' + bgmPath); }).catch(() => console.warn('BGMチェック失敗: ' + bgmPath));
     } catch(e) { console.warn('BGMチェックスキップ', e); }
