@@ -2,19 +2,47 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ミニ動物タワーバトル</title>
     <script src="https://cdn.jsdelivr.net/npm/pathseg@1.2.1/pathseg.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
-        body { margin: 0; padding: 0; background: linear-gradient(180deg,#66d9ff 0%,#a7f0ff 100%); display: flex; justify-content: center; align-items: center; height: 100vh; }
-        canvas { box-shadow: 0 10px 30px rgba(0,0,0,0.1); background: transparent; }
+        :root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
+        * { box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; }
+        body {
+            margin: 0; padding: max(12px, env(safe-area-inset-top, 0px)) 12px calc(84px + var(--safe-bottom));
+            background: linear-gradient(180deg,#66d9ff 0%,#a7f0ff 100%);
+            display: flex; justify-content: center; align-items: center; min-height: 100vh; min-height: 100dvh;
+            overscroll-behavior: none; touch-action: none;
+        }
+        canvas {
+            display: block; width: min(100%, 400px); height: auto;
+            max-height: calc(100dvh - 108px - var(--safe-bottom));
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); background: transparent;
+        }
         #rotateBtn {
             position: fixed; left: 50%; transform: translateX(-50%);
-            bottom: 18px; padding: 12px 22px; background: #fff;
+            bottom: calc(18px + var(--safe-bottom)); padding: 12px 22px; background: #fff;
             border-radius: 12px; border: 3px solid #ffc0cb; color: #e91e63;
-            font-weight: 700; z-index: 9999; box-shadow: 0 6px 14px rgba(0,0,0,0.15); cursor: pointer;
+            font-size: 16px; font-weight: 700; line-height: 1; z-index: 9999; box-shadow: 0 6px 14px rgba(0,0,0,0.15); cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
         }
         #rotateBtn:active { transform: translateX(-50%) scale(0.98); }
+        @media (max-width: 480px) {
+            body {
+                padding: max(10px, env(safe-area-inset-top, 0px)) 8px calc(92px + var(--safe-bottom));
+                align-items: flex-start;
+            }
+            canvas {
+                width: min(100%, 400px, calc(66dvh - 20px));
+                max-height: calc(100dvh - 112px - var(--safe-bottom));
+            }
+            #rotateBtn {
+                min-width: 132px; padding: 15px 24px; border-radius: 14px; font-size: 18px;
+                bottom: calc(18px + var(--safe-bottom));
+            }
+        }
     </style>
 </head>
 <body>
@@ -191,10 +219,19 @@ function createAnimalBodyAt(animal, x, y, isStatic) {
     }
 }
 
-function setHeldPosition(clientX) {
-    if (!heldBody) return;
+function getCanvasPoint(clientX, clientY) {
     const rect = render.canvas.getBoundingClientRect();
-    let x = clientX - rect.left;
+    const x = (clientX - rect.left) * (render.options.width / rect.width);
+    const y = (clientY - rect.top) * (render.options.height / rect.height);
+    if (x < 0 || x > render.options.width || y < 0 || y > render.options.height) return null;
+    return { x, y };
+}
+
+function setHeldPosition(clientX, clientY) {
+    if (!heldBody) return;
+    const point = getCanvasPoint(clientX, clientY);
+    if (!point) return;
+    let x = point.x;
     if (x < 10) x = 10;
     if (x > render.options.width - 10) x = render.options.width - 10;
     if (heldIsArray) {
@@ -204,15 +241,16 @@ function setHeldPosition(clientX) {
     }
 }
 
-render.canvas.addEventListener('mousemove', (e) => setHeldPosition(e.clientX));
+render.canvas.addEventListener('mousemove', (e) => setHeldPosition(e.clientX, e.clientY));
 render.canvas.addEventListener('touchmove', (e) => {
-    if (e.touches && e.touches[0]) setHeldPosition(e.touches[0].clientX);
+    e.preventDefault();
+    if (e.touches && e.touches[0]) setHeldPosition(e.touches[0].clientX, e.touches[0].clientY);
 }, { passive: false });
 
 render.canvas.addEventListener('click', (event) => {
-    const rect = render.canvas.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    if (mouseX < 0 || mouseX > render.options.width) return;
+    const point = getCanvasPoint(event.clientX, event.clientY);
+    if (!point) return;
+    const mouseX = point.x;
 
     if (loadedImages.length === 0) {
         console.warn('画像がまだ読み込まれていません');
