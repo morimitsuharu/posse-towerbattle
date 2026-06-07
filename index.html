@@ -199,10 +199,19 @@ const TAP_MAX_MS = 350;
 const TAP_MOVE_TOLERANCE = 10;
 
 const rotateBtn = document.getElementById('rotateBtn');
+function updateRotationButton() {
+    rotateBtn.textContent = currentRotationDeg === 0 ? '回転↻' : `回転↻ (${currentRotationDeg}°)`;
+}
+
+function resetRotation() {
+    currentRotationDeg = 0;
+    updateRotationButton();
+}
+
 rotateBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     currentRotationDeg = (currentRotationDeg + 30) % 360;
-    rotateBtn.textContent = `回転↻ (${currentRotationDeg}°)`;
+    updateRotationButton();
     const angleRad = currentRotationDeg * Math.PI / 180;
     if (heldBody) {
         if (heldIsArray) {
@@ -295,6 +304,7 @@ function finishDropWatch(removeBodies) {
 function prepareNextAnimal(x = lastAimX) {
     if (heldBody || dropWatch || loadedImages.length === 0) return false;
 
+    resetRotation();
     const animal = loadedImages[Math.floor(Math.random() * loadedImages.length)];
     const spawnX = Math.max(10, Math.min(render.options.width - 10, x));
     const { body } = createAnimalBodyAt(animal, spawnX, holdY, true);
@@ -329,6 +339,7 @@ function dropHeldBody() {
     });
     startDropWatch(droppedBodies);
     clearHeldBody();
+    resetRotation();
     return true;
 }
 
