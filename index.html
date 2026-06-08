@@ -223,6 +223,7 @@ const { Engine, Render, Runner, Bodies, Composite, Vertices, Body, Events } = Ma
 })();
 
 const BASE_SIZE = 120;
+const SMALLER_UNPROCESSED_SIZE = 90;
 
 const PROCESSED_PATHS = [
     'src/img/iloveimg-converted/shoto.png1.png',
@@ -244,6 +245,7 @@ const PROCESSED_PATHS = [
 
 const FIREWORK_TRIGGER_PATH = 'src/img/iloveimg-converted/shoto.png5.png';
 const FIREWORK_EFFECT_MS = 5500;
+const FIREWORK_TRIGGER_WEIGHT = 2;
 
 const UNPROCESSED_PATHS = [
     'src/img/iloveimg-converted/%E7%BF%94%E6%96%971.png',
@@ -251,13 +253,13 @@ const UNPROCESSED_PATHS = [
     'src/img/iloveimg-converted/%E7%BF%94%E6%96%973.png',
 ];
 
-function prepareAnimal(img, bgRemove, sourcePath) {
+function prepareAnimal(img, bgRemove, sourcePath, baseSize = BASE_SIZE) {
     if (!img.naturalWidth || !img.naturalHeight) { console.warn('画像サイズ不正:', img.src); return null; }
     let tw, th;
     if (img.naturalWidth > img.naturalHeight) {
-        tw = BASE_SIZE; th = Math.round(BASE_SIZE * img.naturalHeight / img.naturalWidth);
+        tw = baseSize; th = Math.round(baseSize * img.naturalHeight / img.naturalWidth);
     } else {
-        th = BASE_SIZE; tw = Math.round(BASE_SIZE * img.naturalWidth / img.naturalHeight);
+        th = baseSize; tw = Math.round(baseSize * img.naturalWidth / img.naturalHeight);
     }
     let vertices = null;
     try {
@@ -308,14 +310,22 @@ if (location.protocol === 'file:') console.warn('⚠️ file://で動作中。�
 Promise.all([
     ...PROCESSED_PATHS.map(path => new Promise((resolve) => {
         const img = new Image();
-        img.onload = () => resolve(prepareAnimal(img, false, path));
+        img.onload = () => {
+            // 基準サイズをランダムにばらつかせる（±30px程度）
+            const varied = Math.max(40, Math.round(BASE_SIZE + (Math.random() - 0.5) * 60));
+            resolve(prepareAnimal(img, false, path, varied));
+        };
         img.onerror = () => { console.warn('読み込み失敗:', path); resolve(null); };
         img.src = path;
     })),
     ...UNPROCESSED_PATHS.map(path => new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(prepareAnimal(img, true, path));
+        img.onload = () => {
+            // 小さい画像も少しばらつかせる（±15px程度）
+            const variedSmall = Math.max(32, Math.round(SMALLER_UNPROCESSED_SIZE + (Math.random() - 0.5) * 30));
+            resolve(prepareAnimal(img, true, path, variedSmall));
+        };
         img.onerror = () => { console.warn('読み込み失敗:', path); resolve(null); };
         img.src = path;
     })),
@@ -496,7 +506,12 @@ function prepareNextAnimal(x = lastAimX) {
     if (heldBody || dropWatch || loadedImages.length === 0) return false;
 
     resetRotation();
-    const animal = loadedImages[Math.floor(Math.random() * loadedImages.length)];
+    const weightedAnimals = loadedImages.flatMap((animal) => (
+        animal.sourcePath === FIREWORK_TRIGGER_PATH
+            ? Array.from({ length: FIREWORK_TRIGGER_WEIGHT }, () => animal)
+            : [animal]
+    ));
+    const animal = weightedAnimals[Math.floor(Math.random() * weightedAnimals.length)];
     const spawnX = Math.max(10, Math.min(render.options.width - 10, x));
     const { body } = createAnimalBodyAt(animal, spawnX, holdY, true);
     if (!body) return false;
