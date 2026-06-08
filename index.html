@@ -379,7 +379,7 @@ let fireworksTimer = null;
 // スコア計算（静止しているオブジェクトをカウント）
 setInterval(() => {
     const allBodies = Composite.allBodies(engine.world);
-    const stable = allBodies.filter(b => b !== ground && b.speed < 0.18 && Math.abs(b.angularVelocity) < 0.05 && b.position.y < 620);
+    const stable = allBodies.filter(b => b !== ground && !b.isStatic && b.speed < 0.18 && Math.abs(b.angularVelocity) < 0.05 && b.position.y < 620);
     scoreDisplay.textContent = `スコア: ${stable.length}`;
 }, 400);
 
