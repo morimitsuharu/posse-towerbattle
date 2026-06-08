@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <link rel="icon" type="image/png" href="src/img/favicon.png">
     <link rel="apple-touch-icon" href="src/img/apple-touch-icon.png">
-    <title>ミニ動物タワーバトル</title>
+    <title>POSSEタワーバトル ver.翔斗</title>
     <script src="https://cdn.jsdelivr.net/npm/pathseg@1.2.1/pathseg.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
@@ -553,6 +553,29 @@ function dropHeldBody() {
 }
 
 let isGameOver = false;
+function restartGame() {
+    // オーバーレイがあれば削除
+    const overlay = document.getElementById('game-over-overlay');
+    if (overlay) overlay.remove();
+
+    // ワールド内の全オブジェクトをクリア（地面は残す）
+    Composite.allBodies(engine.world).slice().forEach(b => { if (b !== ground) Composite.remove(engine.world, b); });
+
+    // 状態をリセット
+    isGameOver = false;
+    dropWatch = null;
+    clearHeldBody();
+    activePointer = null;
+    lastAimX = 200;
+    resetRotation();
+
+    // レンダラーとランナーを再起動
+    try { Render.run(render); } catch(e) {}
+    try { Runner.run(runner, engine); } catch(e) {}
+
+    // 次の動物を準備
+    prepareNextAnimal();
+}
 
 function triggerGameOver() {
     if (isGameOver) return;
@@ -577,7 +600,7 @@ function triggerGameOver() {
     const btn = document.createElement('button');
     btn.textContent = 'リトライ';
     Object.assign(btn.style, { padding: '10px 18px', fontSize: '16px', borderRadius: '8px', cursor: 'pointer' });
-    btn.addEventListener('click', () => { location.reload(); });
+    btn.addEventListener('click', () => { restartGame(); });
     overlay.appendChild(title);
     overlay.appendChild(btn);
     container.appendChild(overlay);
@@ -686,7 +709,7 @@ function updateCloudSunOverlap() {
 }
 requestAnimationFrame(updateCloudSunOverlap);
 
-// BGM 制御
+// BGM 制御（ボタン操作のみで再生/停止を許可する）
 (function(){
     const bgmPath = 'src/audio/bgm.mp3';
     const bgm = new Audio(bgmPath);
@@ -694,6 +717,19 @@ requestAnimationFrame(updateCloudSunOverlap);
     bgm.preload = 'auto';
     bgm.volume = 0.5;
     const btn = document.getElementById('bgmToggle');
+
+    // 内部フラグで再生を許可する仕組みを導入し、外部からの直接再生を防ぐ
+    let _allowPlay = false;
+    const _origPlay = bgm.play.bind(bgm);
+    bgm.play = function() {
+        if (!_allowPlay) {
+            return Promise.reject(new Error('BGMはボタン操作でのみ再生できます'));
+        }
+        // 再生要求を処理したらフラグをリセット
+        _allowPlay = false;
+        return _origPlay();
+    };
+
     function updateBtn(){
         const on = !bgm.paused;
         const text = on ? 'BGM: オン' : 'BGM: オフ';
@@ -701,8 +737,11 @@ requestAnimationFrame(updateCloudSunOverlap);
         btn.title = text;
         btn.setAttribute('aria-pressed', on.toString());
     }
+
     btn.addEventListener('click', ()=>{
         if (bgm.paused) {
+            // ボタン操作の直後のみ再生を許可
+            _allowPlay = true;
             bgm.play().catch((e)=>{
                 console.warn('BGMの再生がブロックされました。ユーザー操作で再生してください。', e);
             });
@@ -711,6 +750,7 @@ requestAnimationFrame(updateCloudSunOverlap);
         }
         updateBtn();
     });
+
     try {
         fetch(bgmPath, { method: 'HEAD' }).then(res => { if (!res.ok) console.warn('BGMファイルが見つかりません: ' + bgmPath); }).catch(() => console.warn('BGMチェック失敗: ' + bgmPath));
     } catch(e) { console.warn('BGMチェックスキップ', e); }
