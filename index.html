@@ -225,6 +225,10 @@ const { Engine, Render, Runner, Bodies, Composite, Vertices, Body, Events } = Ma
 const BASE_SIZE = 120;
 const SMALLER_UNPROCESSED_SIZE = 90;
 
+// 土台の幅を少しだけ大きくする（高さはそのまま）
+const GROUND_WIDTH = 240; // 元は200
+const GROUND_HEIGHT = 40;
+
 const PROCESSED_PATHS = [
     'src/img/iloveimg-converted/shoto.png1.png',
     'src/img/iloveimg-converted/shoto.png2.png',
@@ -248,7 +252,6 @@ const FIREWORK_EFFECT_MS = 5500;
 const FIREWORK_TRIGGER_WEIGHT = 2;
 
 const UNPROCESSED_PATHS = [
-    'src/img/iloveimg-converted/%E7%BF%94%E6%96%971.png',
     'src/img/iloveimg-converted/%E7%BF%94%E6%96%972.png',
     'src/img/iloveimg-converted/%E7%BF%94%E6%96%973.png',
 ];
@@ -347,7 +350,7 @@ Render.run(render);
 const runner = Runner.create();
 Runner.run(runner, engine);
 
-const ground = Bodies.rectangle(200, 500, 200, 40, { isStatic: true, render: { fillStyle: '#4caf50' } });
+const ground = Bodies.rectangle(200, 500, GROUND_WIDTH, GROUND_HEIGHT, { isStatic: true, render: { fillStyle: '#4caf50' } });
 Composite.add(engine.world, ground);
 
 // ゲーム管理用の変数（一本化）
